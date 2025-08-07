@@ -1,0 +1,191 @@
+{% extends 'base.html.twig' %}
+
+{% block title %}Live - Admin{% endblock %}
+
+{% block body %}
+    <div class="container mt-5">
+        <h1 class="mb-4">🎬 Diffusion en direct</h1>
+
+        {% if live %}
+            <p><strong>Début du live :</strong> {{ live.startLive|date('Y-m-d H:i') }}</p>
+
+            <video id="webcamPreview" autoplay muted width="100%" class="mb-3"></video>
+
+            <div id="debugLogs" class="mt-3 p-3 bg-light" style="height: 200px; overflow-y: auto; font-family: monospace; font-size: 12px;"></div>
+
+            <a href="{{ path('admin_live_stop', {'id': live.id}) }}" class="btn btn-danger">
+                ⛔ Terminer le Live
+            </a>
+        {% else %}
+            <p>Aucun live n'est en cours pour le moment.</p>
+            <a href="{{ path('admin_live_start') }}" class="btn btn-success">
+                🎥 Démarrer un Live
+            </a>
+        {% endif %}
+    </div>
+{% endblock %}
+
+{% block javascripts %}
+    {{ parent() }}
+
+    {% if live %}
+        <script>
+        // Fonction de debug
+        function debugLog(message) {
+            console.log(message);
+            const debugDiv = document.getElementById('debugLogs');
+            if (debugDiv) {
+                const time = new Date().toLocaleTimeString();
+                debugDiv.innerHTML += `[${time}] ${message}<br>`;
+                debugDiv.scrollTop = debugDiv.scrollHeight;
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            debugLog('🚀 Démarrage du streamer');
+
+            const signalingServer = new WebSocket('ws://localhost:9090');
+            const peerConnections = new Map();
+            let localStream;
+
+            // Configuration des événements WebSocket
+            signalingServer.onopen = () => {
+                debugLog('✅ Connexion WebSocket établie (streamer)');
+                const message = { type: 'streamer', adminId: '{{ seller.id }}'};
+                debugLog(`📤 Envoi message streamer: ${JSON.stringify(message)}`);
+                signalingServer.send(JSON.stringify(message));
+            };
+
+            signalingServer.onerror = (error) => {
+                debugLog(`❌ Erreur WebSocket: ${error}`);
+                debugLog(`❌ Vérifiez que le serveur Node.js écoute sur ${currentHost}:9090`);
+                console.error('WebSocket Error:', error);
+            };
+
+            signalingServer.onclose = (event) => {
+                debugLog(`🔌 Connexion WebSocket fermée: ${event.code} - ${event.reason}`);
+            };
+
+            // Gestion des messages WebSocket
+            signalingServer.onmessage = async (event) => {
+                const data = JSON.parse(event.data);
+                debugLog(`📥 Message reçu: ${JSON.stringify(data)}`);
+
+                if (data.type === 'newViewer') {
+                    const viewerId = data.viewerId;
+                    debugLog(`🆕 Nouveau viewer: ${viewerId}`);
+
+                    if (!localStream) {
+                        debugLog('⚠️ Pas de stream local disponible pour le viewer');
+                        return;
+                    }
+
+                    const pc = new RTCPeerConnection({
+                        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+                    });
+
+                    // Ajouter les tracks
+                    localStream.getTracks().forEach(track => {
+                        pc.addTrack(track, localStream);
+                        debugLog(`🎬 Track ${track.kind} ajouté pour viewer ${viewerId}`);
+                    });
+
+                    pc.onicecandidate = e => {
+                        if (e.candidate) {
+                            debugLog(`🧊 ICE candidate pour viewer ${viewerId}: ${e.candidate.type}`);
+                            signalingServer.send(JSON.stringify({
+                                type: 'candidate',
+                                candidate: e.candidate,
+                                target: 'viewer',
+                                viewerId: viewerId
+                            }));
+                        } else {
+                            debugLog(`🧊 Tous ICE candidates envoyés pour viewer ${viewerId}`);
+                        }
+                    };
+
+                    pc.onconnectionstatechange = () => {
+                        debugLog(`🔗 Connection state pour ${viewerId}: ${pc.connectionState}`);
+                    };
+
+                    try {
+                        debugLog(`📝 Création offer pour viewer ${viewerId}...`);
+                        const offer = await pc.createOffer();
+                        await pc.setLocalDescription(offer);
+                        debugLog(`✅ Offer créée pour viewer ${viewerId}`);
+
+                        const offerMessage = {
+                            type: 'offer',
+                            offer: offer,
+                            viewerId: viewerId
+                        };
+
+                        debugLog(`📤 Envoi offer: ${JSON.stringify(offerMessage)}`);
+                        signalingServer.send(JSON.stringify(offerMessage));
+
+                        peerConnections.set(viewerId, pc);
+                        debugLog(`💾 PeerConnection stockée pour viewer ${viewerId}`);
+
+                    } catch (error) {
+                        debugLog(`❌ Erreur création offer pour ${viewerId}: ${error.message}`);
+                    }
+                }
+                else if (data.type === 'answer') {
+                    const viewerId = data.viewerId;
+                    debugLog(`📥 Answer reçue de viewer ${viewerId}`);
+
+                    const pc = peerConnections.get(viewerId);
+                    if (pc) {
+                        try {
+                            await pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+                            debugLog(`✅ Answer acceptée pour viewer ${viewerId}`);
+                        } catch (error) {
+                            debugLog(`❌ Erreur answer pour ${viewerId}: ${error.message}`);
+                        }
+                    } else {
+                        debugLog(`⚠️ Pas de PeerConnection pour viewer ${viewerId}`);
+                    }
+                }
+                else if (data.type === 'candidate') {
+                    const viewerId = data.viewerId;
+                    debugLog(`📥 ICE candidate reçu de viewer ${viewerId}`);
+
+                    const pc = peerConnections.get(viewerId);
+                    if (pc) {
+                        try {
+                            await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+                            debugLog(`✅ ICE candidate ajouté pour viewer ${viewerId}`);
+                        } catch (error) {
+                            debugLog(`❌ Erreur ICE candidate pour ${viewerId}: ${error.message}`);
+                        }
+                    } else {
+                        debugLog(`⚠️ Pas de PeerConnection pour ICE candidate de ${viewerId}`);
+                    }
+                } else {
+                    debugLog(`❓ Message non géré: ${data.type}`);
+                }
+            };
+
+            // PUIS obtenir le stream local
+            debugLog('🎥 Demande accès caméra...');
+            navigator.mediaDevices.getUserMedia({ video: true, audio: true })
+                .then(stream => {
+                    localStream = stream;
+                    const webcam = document.getElementById("webcamPreview");
+                    webcam.srcObject = stream;
+                    debugLog(`✅ Stream local obtenu: ${stream.getTracks().length} tracks`);
+
+                    stream.getTracks().forEach(track => {
+                        debugLog(`📹 Track disponible: ${track.kind} - ${track.label}`);
+                    });
+
+                    debugLog('🔄 Streamer prêt avec WebSocket et stream local');
+                })
+                .catch(err => {
+                    debugLog(`❌ Erreur accès caméra: ${err.message}`);
+                    alert("Impossible d'accéder à la caméra : " + err.message);
+                });
+        });
+        </script>
+    {% endif %}
+{% endblock %}
