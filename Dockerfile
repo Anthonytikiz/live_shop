@@ -1,44 +1,32 @@
-# Image de base
-FROM php:8.3.6-fpm
+# Étape 1 : Image PHP avec extensions nécessaires
+FROM php:8.2-fpm
 
-# Installer les dépendances
+# Installer les dépendances système
 RUN apt-get update && apt-get install -y \
-    nginx zip git unzip libxml2-dev libxslt-dev \
-    libicu-dev libzip-dev && \
-    docker-php-ext-install zip intl pdo pdo_mysql opcache && \
-    docker-php-ext-configure intl
+    git unzip zip curl libpq-dev libonig-dev libxml2-dev libzip-dev \
+    && docker-php-ext-install pdo pdo_pgsql zip
 
 # Installer Composer
-RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Définir le répertoire de travail
+# Créer le dossier de l'app
 WORKDIR /var/www
 
-# Copier les fichiers du projet
+# Copier tous les fichiers du projet
 COPY . .
 
-# Installer les dépendances PHP avec Composer
+# 🟢 Ajouter un .env de secours (important pour éviter l'erreur)
+COPY .env.docker .env
+
+# Installer les dépendances PHP
 ENV COMPOSER_ALLOW_SUPERUSER=1
 RUN composer install --ignore-platform-reqs --optimize-autoloader --no-interaction
 
-# Configurer les permissions des répertoires Symfony
-RUN mkdir -p var/log var/cache public && \
-    chown -R www-data:www-data var/log var/cache public
+# Donner les bons droits
+RUN chown -R www-data:www-data /var/www/var /var/www/vendor
 
-# Créer le répertoire de log pour php-fpm et définir les permissions
-RUN mkdir -p /var/log/php-fpm && chown -R www-data:www-data /var/log/php-fpm
+# Exposer le port (optionnel si tu utilises Nginx/Render auto)
+EXPOSE 9000
 
-# Copier la configuration NGINX et Supervisor
-COPY nginx.conf /etc/nginx/nginx.conf
-COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
-CMD service nginx start && php-fpm --nodaemonize
-
-# Installer Supervisor
-RUN apt-get install -y supervisor
-
-# Exposer le port 80
-EXPOSE 80
-
-# Lancer Supervisor pour gérer NGINX et PHP-FPM
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Commande par défaut
+CMD ["php-fpm"]
