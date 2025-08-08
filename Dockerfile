@@ -1,32 +1,30 @@
-# Étape 1 : Image PHP avec extensions nécessaires
-FROM php:8.2-fpm
+# 1. Image PHP avec extensions nécessaires
+FROM php:8.3-fpm
 
-# Installer les dépendances système
+# 2. Installer dépendances système & PHP extensions
 RUN apt-get update && apt-get install -y \
-    git unzip zip curl libpq-dev libonig-dev libxml2-dev libzip-dev \
-    && docker-php-ext-install pdo pdo_pgsql zip
+    nginx supervisor git unzip libzip-dev libicu-dev libxml2-dev curl \
+    && docker-php-ext-install intl pdo_mysql zip opcache
 
-# Installer Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+# 3. Installer Composer globalement
+RUN curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
 
-# Créer le dossier de l'app
+# 4. Copier le code dans le container
 WORKDIR /var/www
-
-# Copier tous les fichiers du projet
 COPY . .
 
-# 🟢 Ajouter un .env de secours (important pour éviter l'erreur)
-COPY .env.docker .env
+# 5. Installer dépendances PHP sans dev, autoload optimisé
+RUN composer install --no-dev --optimize-autoloader
 
-# Installer les dépendances PHP
-ENV COMPOSER_ALLOW_SUPERUSER=1
-RUN composer install --ignore-platform-reqs --optimize-autoloader --no-interaction
+# 6. Configurer permissions Symfony (cache & logs)
+RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/cache var/log public
 
-# Donner les bons droits
-RUN chown -R www-data:www-data /var/www/var /var/www/vendor
+# 7. Copier les fichiers de config pour NGINX et Supervisor (à créer)
+COPY docker/nginx.conf /etc/nginx/nginx.conf
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# Exposer le port (optionnel si tu utilises Nginx/Render auto)
-EXPOSE 9000
+# 8. Exposer le port HTTP
+EXPOSE 80
 
-# Commande par défaut
-CMD ["php-fpm"]
+# 9. Commande de démarrage (lance Supervisor qui lance NGINX + PHP-FPM)
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
