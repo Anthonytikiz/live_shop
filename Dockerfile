@@ -14,7 +14,9 @@ WORKDIR /var/www
 COPY . .
 
 # 5. Installer dépendances PHP sans dev, autoload optimisé
-RUN composer install --no-dev --optimize-autoloader
+# RUN composer install --no-dev --optimize-autoloader
+RUN composer install --no-dev --optimize-autoloader --no-interaction --no-scripts
+
 
 # 6. Configurer permissions Symfony (cache & logs)
 RUN mkdir -p var/cache var/log && chown -R www-data:www-data var/cache var/log public
