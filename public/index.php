@@ -1,24 +1,23 @@
 <?php
 
-use App\Kernel;
+// DEBUG: Check if runtime file exists
+$runtimePath = __DIR__.'/../vendor/autoload_runtime.php';
 
-$autoloadPath = dirname(__DIR__).'/vendor/autoload_runtime.php';
-
-// Debugging block
-if (!file_exists($autoloadPath)) {
+if (!file_exists($runtimePath)) {
     header('Content-Type: text/plain');
-    echo "CRITICAL: autoload_runtime.php missing!\n\n";
-    echo "Scanned path: $autoloadPath\n\n";
+    echo "RUNTIME FILE MISSING!\n\n";
+    echo "Attempting to generate...\n";
     
-    echo "Vendor directory contents:\n";
-    echo implode("\n", scandir(dirname($autoloadPath)));
+    // Try to generate manually
+    system('php vendor/bin/runtime get --current --output=' . escapeshellarg($runtimePath));
     
-    echo "\n\nComposer installed packages:\n";
-    passthru('composer show -i');
-    exit(1);
+    echo "Generation result: " . (file_exists($runtimePath) ? "SUCCESS" : "FAILED");
+    echo "\n\nDirectory contents:\n";
+    system('ls -la ' . escapeshellarg(dirname($runtimePath)));
+    exit;
 }
 
-require_once $autoloadPath;
+require_once $runtimePath;
 
 return function (array $context) {
     return new Kernel($context['APP_ENV'], (bool) $context['APP_DEBUG']);
