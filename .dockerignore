@@ -1,4 +1,6 @@
-vendor
-node_modules
+vendor/
+var/
 .env
-.git
+docker-compose*
+.git/
+.gitignore
