@@ -1,26 +1,24 @@
 <?php
-
 namespace App\Controller;
-
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use App\Repository\CategoryRepository;
+use App\Repository\ItemRepository;
 use App\Repository\SaleRepository;
 use App\Repository\UsersRepository;
-use App\Entity\Users;
+use App\Entity\LiveDetails;
 use App\Entity\Live;
 use Symfony\Component\HttpFoundation\Request;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\JsonResponse;
-
 class AdminController extends AbstractController
 {
     public function __construct(
         private SaleRepository $saleRepository,
-        private UsersRepository $userRepository
+        private UsersRepository $userRepository,
+        private ItemRepository $itemRepository
     ) {}
-
     #[Route('/dashboard', name: 'app_dashboard')]
     public function index(
         Request $request,
@@ -28,19 +26,16 @@ class AdminController extends AbstractController
         UsersRepository $usersRepository,
         SaleRepository $saleRepository
     ): Response {
-        // 📌 Valeurs par défaut
+        // :épingle: Valeurs par défaut
         $defaultStart = new \DateTime('first day of January this year');
         $defaultEnd = new \DateTime('last day of December this year');
-
-        // 📌 Récupérer les valeurs du formulaire
+        // :épingle: Récupérer les valeurs du formulaire
         $dateD = $request->request->get('dateD') ? new \DateTime($request->request->get('dateD')) : $defaultStart;
         $dateF = $request->request->get('dateF') ? new \DateTime($request->request->get('dateF')) : $defaultEnd;
         $categoryId = $request->request->get('category');
-
-        // 📌 Vendeur par défaut
+        // :épingle: Vendeur par défaut
         $session = $request->getSession();
         $defaultSeller = $session->get('user');
-
         if (!$defaultSeller || !$defaultSeller instanceof \App\Entity\Users) {
             throw $this->createNotFoundException('Aucun utilisateur connecté trouvé dans la session');
         }
@@ -49,8 +44,7 @@ class AdminController extends AbstractController
         {
             $categoryId = 1;
         }
-
-        // 📊 Statistiques globales
+        // :histogramme: Statistiques globales
         $stats = $saleRepository->getStatistiquesVendeur($dateD, $dateF, $defaultSeller->getId());
         $ventesParCategorieParMois = $saleRepository->getVentesVendeurParCategorieParMois(
             $dateD,
@@ -69,7 +63,6 @@ class AdminController extends AbstractController
             $defaultSeller->getId(),
             3
         );
-
         return $this->render('admin/index.html.twig', [
             'categories' => $categoryRepository->findAll(),
             'category' => $categoryRepository->find($categoryId),
@@ -82,7 +75,6 @@ class AdminController extends AbstractController
             'bestSellers' => $bestSeller ?? null
         ]);
     }
-
     #[Route('/api/dashboard', name: 'api_dashboard', methods: ['POST'])]
     public function apiDashboard(
         Request $request,
@@ -93,35 +85,25 @@ class AdminController extends AbstractController
         // Valeurs par défaut
         $defaultStart = new \DateTime('first day of January this year');
         $defaultEnd = new \DateTime('last day of December this year');
-
         // Récupérer les paramètres GET
         $data = json_decode($request->getContent(), true);
-
         $dateD = isset($data['dateD']) ? new \DateTime($data['dateD']) : $defaultStart;
         $dateF = isset($data['dateF']) ? new \DateTime($data['dateF']) : $defaultEnd;
         $categoryId = $data['category'] ?? 1;
-
-
         // Vendeur connecté via session
         $session = $request->getSession();
         $defaultSeller = $session->get('user');
-
         if (!$defaultSeller || !$defaultSeller instanceof \App\Entity\Users) {
             return new JsonResponse(['error' => 'Aucun utilisateur connecté'], 401);
         }
-
         $defaultSeller = $usersRepository->find($defaultSeller->getId());
         // $defaultSeller = $usersRepository->find(1);
-
-
         // Statistiques et données
         $stats = $saleRepository->getStatistiquesVendeur($dateD, $dateF, $defaultSeller->getId());
         $ventesParCategorieParMois = $saleRepository->getVentesVendeurParCategorieParMois($dateD, $dateF, $defaultSeller->getId());
         $ventesParArticle = $saleRepository->getVentesParArticlePourCategorie($dateD, $dateF, $defaultSeller->getId(), $categoryId);
         $bestSeller = $saleRepository->getTopArticlesVendeur($dateD, $dateF, $defaultSeller->getId(), 3);
-
         // Optionnel : transformer objets Doctrine si besoin
-
         return new JsonResponse([
             'dates' => [
                 'start' => $dateD->format('Y-m-d'),
@@ -140,32 +122,58 @@ class AdminController extends AbstractController
         ]);
     }
 
-    #[Route('/liveStart', name: 'admin_live_start')]
-    public function startLive(Request $request, EntityManagerInterface $em, UsersRepository $usersRepository): Response
-    {
+    #[Route('/liveStart', name: 'admin_live_form')]
+    public function startLiveSelect(
+        Request $request,
+        ItemRepository $itemRepository,
+        UsersRepository $usersRepository
+    ): Response {
         $session = $request->getSession();
         $user = $session->get('user');
         $userID = $usersRepository->find($user->getId());
-        $user = $usersRepository->find($userID);
 
-        // Vérifie si un live est déjà actif
-        $activeLive = $em->getRepository(Live::class)->findOneBy([
-            'seller' => $user,
-            'endLive' => null
+        $items = $itemRepository->findAvailableItems($userID);
+        return $this->render('admin/liveForm.html.twig', [
+            'items' => $items
         ]);
+    }
 
-        if ($activeLive) {
-            $this->addFlash('warning', 'Un live est déjà en cours.');
-            return $this->redirectToRoute('app_live');
+    #[Route('/liveConfirm', name: 'admin_live_confirm', methods: ['POST'])]
+    public function confirmLive(
+        Request $request,
+        EntityManagerInterface $em,
+        UsersRepository $usersRepository,
+        ItemRepository $itemRepository
+    ): Response {
+        $session = $request->getSession();
+        $user = $usersRepository->find($session->get('user')->getId());
+        // Récupérer les données du formulaire
+        $titre = $request->request->get('titre');
+        $description = $request->request->get('description');
+        $selectedItems = $request->request->all('items');
+        if (!is_array($selectedItems)) {
+            $selectedItems = [];
         }
-
+        // Créer et remplir l'entité Live
         $live = new Live();
         $live->setStartLive(new \DateTime());
         $live->setSeller($user);
+        $live->setTitre($titre);
+        $live->setDescription($description);
         $em->persist($live);
         $em->flush();
-
-        return $this->redirectToRoute('app_live');
+        // Insérer dans LiveDetails chaque item choisi
+        foreach ($selectedItems as $itemId) {
+            $item = $itemRepository->find($itemId);
+            if ($item) {
+                $liveDetail = new LiveDetails();
+                $liveDetail->setLive($live);
+                $liveDetail->setItem($item);
+                $em->persist($liveDetail);
+            }
+        }
+        $em->flush();
+        return $this->redirectToRoute('app_live', ['id' => $live->getId()]);
     }
 
     #[Route('/stopLive/{id}', name: 'admin_live_stop')]
@@ -175,14 +183,11 @@ class AdminController extends AbstractController
         $user = $session->get('user');
         $userID = $usersRepository->find($user->getId());
         $user = $usersRepository->find($userID);
-
         if ($live->getSeller()->getId() !== $user->getId()) {
             throw $this->createNotFoundException('Vous ne pouvez pas arrêter ce live.');
         }
-
         $live->setEndLive(new \DateTime());
         $em->flush();
-
         $this->addFlash('success', 'Le live a été terminé avec succès.');
         return $this->redirectToRoute('app_dashboard');
     }
@@ -194,15 +199,15 @@ class AdminController extends AbstractController
         $user = $session->get('user');
         $userID = $usersRepository->find($user->getId());
         $user = $usersRepository->find($userID);
-
         $activeLive = $em->getRepository(Live::class)->findOneBy([
             'seller' => $user,
             'endLive' => null
         ]);
-
         return $this->render('admin/live.html.twig', [
             'live' => $activeLive,
             'seller' => $user,
+            'titre' => $activeLive?->getTitre(),
+            'description' => $activeLive?->getDescription(),
         ]);
     }
 }

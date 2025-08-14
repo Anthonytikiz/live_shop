@@ -16,6 +16,20 @@ class LiveRepository extends ServiceEntityRepository
         parent::__construct($registry, Live::class);
     }
 
+
+    /**
+     * Retourne les lives en cours (endLive IS NULL), récents d'abord.
+     * @return Live[]
+     */
+    public function findOnGoingLives(): array
+    {
+        return $this->createQueryBuilder('l')
+            ->andWhere('l.endLive IS NULL')
+            ->orderBy('l.startLive', 'DESC')
+            ->getQuery()
+            ->getResult();
+    }
+
     public function findActiveLives(): array
     {
         return $this->createQueryBuilder('l')

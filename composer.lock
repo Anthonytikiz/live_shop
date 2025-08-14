@@ -37,18 +37,6 @@
             "suggest": {
                 "php": "PHP 8.0 or higher comes with attributes, a native replacement for annotations"
             },
-            "scripts": {
-                "auto-scripts": {
-                "cache:clear": "symfony-cmd",
-                "assets:install %PUBLIC_DIR%": "symfony-cmd"
-                },
-                "post-install-cmd": [
-                "@auto-scripts"
-                ],
-                "post-update-cmd": [
-                "@auto-scripts"
-                ]
-            },
             "type": "library",
             "autoload": {
                 "psr-4": {
@@ -6445,7 +6433,7 @@
     ],
     "aliases": [],
     "minimum-stability": "stable",
-    "stability-flags": [],
+    "stability-flags": {},
     "prefer-stable": true,
     "prefer-lowest": false,
     "platform": {
@@ -6453,6 +6441,6 @@
         "ext-ctype": "*",
         "ext-iconv": "*"
     },
-    "platform-dev": [],
-    "plugin-api-version": "2.2.0"
+    "platform-dev": {},
+    "plugin-api-version": "2.6.0"
 }

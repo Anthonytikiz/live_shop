@@ -1,156 +1,115 @@
-{% extends 'base.html.twig' %}
+{# filepath: templates/client/index.html.twig #}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <title>LiveShop</title>
+    <link href="https://fonts.googleapis.com/css?family=Inter:400,600&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Inter', Arial, sans-serif;
+            background: #f6f6f6;
+        }
+        .page {
+            padding: 100px 30px 40px; /* pour laisser la navbar fixed */
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .section {
+            margin-bottom: 50px;
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        .section-title { font-size: 18px; font-weight: 700; color: #000; }
+        body.dark-theme .section-title { color: #fff; }
+        .see-all {
+            color: #567AF4;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .divider { height: 4px; background: #7a61ff; border-radius: 2px; margin-bottom: 18px; width: 70%; }
+        body.dark-theme .divider { background: #567AF4; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 24px;
+        }
+        .card { background: #fff; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.08); overflow: hidden; transition: transform .2s ease; }
+        body.dark-theme .card { background: #1f1f1f; box-shadow: 0 4px 12px rgba(0,0,0,0.5); }
+        .card:hover { transform: translateY(-2px); }
+        .thumb {
+            position: relative;
+            width: 100%;
+            padding-top: 56.25%; /* 16:9 */
+            overflow: hidden;
+        }
+        .thumb img {
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            width: 100%; height: 100%;
+            object-fit: cover;
+        }
+        /* Flou léger pour les lives en cours */
+        .card.is-live .thumb img {
+            filter: blur(3px);
+            transform: scale(1.06);
+        }
+        .badge { position: absolute; top: 8px; left: 8px; display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,0.65); color: #fff; padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+        .viewer { position: absolute; top: 8px; right: 8px; background: #ff3b30; color: #fff; padding: 4px 8px; border-radius: 999px; font-size: 12px; font-weight: 700; }
+        .username-chip { position: absolute; bottom: 10px; left: 10px; background: #1e90ff; color: #fff; border-radius: 999px; padding: 4px 10px; font-size: 12px; font-weight: 600; }
+        @media (max-width: 992px){ .grid{ grid-template-columns: repeat(2,1fr);} }
+        @media (max-width: 576px){ .grid{ grid-template-columns: 1fr;} }
+    </style>
+</head>
+<body>
+    {% include 'components/navbarClient.html.twig' %}
+    <div class="page">
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">Followed</div>
+                <a class="see-all" href="#">voir tous</a>
+            </div>
+            <div class="divider"></div>
 
-{% block title %}Live en direct{% endblock %}
+            <div class="grid">
+                {% for live in followedLives %}
+                    <a class="card{% if live.isLive %} is-live{% endif %}" href="{{ path('app_client_live', { id: live.id }) }}" style="text-decoration:none;">
+                        <div class="thumb">
+                            <img src="{{ live.thumbnail }}" alt="{{ live.title }}">
+                            <div class="badge">{{ live.language }}</div>
+                            <div class="viewer">{{ live.viewers }}</div>
+                            <div class="username-chip">{{ live.username }}</div>
+                        </div>
+                    </a>
+                {% endfor %}
+            </div>
+        </div>
 
-{% block body %}
-    <div class="form-group mb-4">
-        <label for="adminSelect">🎙️ Choisissez un live :</label>
-        <select id="adminSelect" class="form-control">
-            <option disabled selected>-- Sélectionner un streamer --</option>
-            {% for live in lives %}
-                <option value="{{ live.seller.id }}">{{ live.seller.username }}</option>
-            {% endfor %}
-        </select>
-    </div>
+        <div class="section">
+            <div class="section-header">
+                <div class="section-title">Followed</div>
+                <a class="see-all" href="#">voir tous</a>
+            </div>
+            <div class="divider"></div>
 
-    <div class="container mt-5">
-        <h1 class="text-center mb-4">🎥 Regarder le Live</h1>
-
-        <div class="video-container text-center">
-            <video id="viewerVideo" autoplay playsinline controls muted width="100%" class="mb-4"></video>
-            <div id="status" class="alert alert-info">En attente du stream...</div>
-            <button id="playButton" class="btn btn-success btn-lg" style="display: none;">
-                ▶️ Cliquer pour démarrer le live
-            </button>
+            <div class="grid">
+                {% for live in recommendedLives %}
+                    <a class="card{% if live.isLive %} is-live{% endif %}" href="{{ path('app_client_live', { id: live.id }) }}" style="text-decoration:none;">
+                        <div class="thumb">
+                            <img src="{{ live.thumbnail }}" alt="{{ live.title }}">
+                            <div class="badge">{{ live.language }}</div>
+                            <div class="viewer">{{ live.viewers }}</div>
+                            <div class="username-chip">{{ live.username }}</div>
+                        </div>
+                    </a>
+                {% endfor %}
+            </div>
         </div>
     </div>
-{% endblock %}
-
-{% block javascripts %}
-    {{ parent() }}
-    <script>
-        const viewerId = '{{ userId }}';
-
-        function debugLog(message) {
-            console.log(message);
-        }
-
-        document.addEventListener("DOMContentLoaded", function () {
-            debugLog(`🚀 Viewer démarré: ID = ${viewerId}`);
-            const signalingServer = new WebSocket('ws://localhost:9090');
-            let peerConnection;
-            const statusDiv = document.getElementById('status');
-            const playButton = document.getElementById('playButton');
-            const video = document.getElementById('viewerVideo');
-            const adminSelect = document.getElementById('adminSelect');
-
-            let selectedAdminId = null;
-
-            playButton.addEventListener('click', () => {
-                video.play().then(() => {
-                    debugLog('✅ Lecture manuelle démarrée');
-                    playButton.style.display = 'none';
-                    statusDiv.textContent = 'Stream en cours...';
-                    statusDiv.className = 'alert alert-success';
-                }).catch(e => {
-                    debugLog(`❌ Erreur lecture: ${e.message}`);
-                });
-            });
-
-            signalingServer.onopen = () => {
-                debugLog('✅ WebSocket ouvert');
-                statusDiv.textContent = 'WebSocket connecté. Sélectionnez un live.';
-            };
-
-            signalingServer.onerror = error => {
-                debugLog(`❌ Erreur WebSocket: ${error}`);
-                statusDiv.textContent = 'Erreur de connexion WebSocket';
-                statusDiv.className = 'alert alert-danger';
-            };
-
-            signalingServer.onclose = () => {
-                console.warn("🔌 Connexion WebSocket fermée.");
-                console.warn("Code:", event.code);
-                console.warn("Raison:", event.reason);
-                console.warn("Était-ce propre ?", event.wasClean);
-                debugLog('🔌 WebSocket fermé');
-                statusDiv.textContent = 'Connexion WebSocket fermée';
-                statusDiv.className = 'alert alert-warning';
-            };
-
-            // Lorsqu'un streamer est sélectionné
-            adminSelect.addEventListener('change', () => {
-                selectedAdminId = adminSelect.value;
-                debugLog(`🎯 Streamer sélectionné: ${selectedAdminId}`);
-
-                if (signalingServer.readyState === WebSocket.OPEN) {
-                    signalingServer.send(JSON.stringify({
-                        type: 'viewer',
-                        viewerId: viewerId,
-                        adminId: selectedAdminId
-                    }));
-
-                    statusDiv.textContent = 'Demande de connexion au streamer...';
-                }
-            });
-
-            signalingServer.onmessage = async event => {
-                const data = JSON.parse(event.data);
-                debugLog(`📩 Message reçu: ${data.type}`);
-
-                if (data.type === 'streamerUnavailable') {
-                    statusDiv.textContent = 'Le streamer n\'est pas disponible';
-                    statusDiv.className = 'alert alert-warning';
-                    return;
-                }
-
-                if (data.type === 'offer') {
-                    peerConnection = new RTCPeerConnection({
-                        iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-                    });
-
-                    peerConnection.ontrack = event => {
-                        if (event.streams && event.streams[0]) {
-                            video.srcObject = event.streams[0];
-                            video.play().then(() => {
-                                statusDiv.textContent = 'Stream en cours...';
-                                statusDiv.className = 'alert alert-success';
-                            }).catch(err => {
-                                playButton.style.display = 'block';
-                                statusDiv.textContent = 'Stream prêt. Cliquez pour démarrer';
-                                statusDiv.className = 'alert alert-warning';
-                            });
-                        }
-                    };
-
-                    peerConnection.onicecandidate = e => {
-                        if (e.candidate) {
-                            signalingServer.send(JSON.stringify({
-                                type: 'candidate',
-                                candidate: e.candidate,
-                                target: 'streamer',
-                                viewerId: viewerId
-                            }));
-                        }
-                    };
-
-                    await peerConnection.setRemoteDescription(new RTCSessionDescription(data.offer));
-                    const answer = await peerConnection.createAnswer();
-                    await peerConnection.setLocalDescription(answer);
-
-                    signalingServer.send(JSON.stringify({
-                        type: 'answer',
-                        answer: answer,
-                        viewerId: viewerId
-                    }));
-                }
-
-                else if (data.type === 'candidate') {
-                    if (peerConnection) {
-                        await peerConnection.addIceCandidate(new RTCIceCandidate(data.candidate));
-                    }
-                }
-            };
-        });
-    </script>
-{% endblock %}
+</body>
+</html>
