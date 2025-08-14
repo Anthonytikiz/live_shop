@@ -1,7 +1,6 @@
-# 1️⃣ Image PHP + extensions
 FROM php:8.2-apache
 
-# Installer dépendances système et PHP
+# Installer extensions PHP
 RUN apt-get update && apt-get install -y \
     git unzip libicu-dev libzip-dev zip \
     && docker-php-ext-install intl pdo pdo_mysql zip opcache \
@@ -11,28 +10,24 @@ RUN apt-get update && apt-get install -y \
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
-
-# Autoriser Composer en root
 ENV COMPOSER_ALLOW_SUPERUSER=1
 
-# Copier seulement les fichiers de dépendances pour profiter du cache Docker
-COPY composer.json composer.lock ./
-
-# Installer les dépendances SANS scripts
-RUN composer install --no-dev --no-scripts --optimize-autoloader --no-interaction
-
-# Copier tout le code du projet
+# Copier tout le projet (y compris .env)
 COPY . .
 
-# Exécuter manuellement les commandes Symfony nécessaires
+# Installer les dépendances sans scripts pour éviter symfony-cmd
+RUN composer install --no-dev --no-scripts --optimize-autoloader --no-interaction
+
+# Créer var/ si manquant et donner les droits
+RUN mkdir -p var/cache var/log var/sessions \
+    && chown -R www-data:www-data var/
+
+# Exécuter manuellement les scripts Symfony
 RUN php bin/console cache:clear --env=prod || true
 RUN php bin/console assets:install public || true
 
-# Droits pour Apache
-RUN chown -R www-data:www-data var/
-
-# Exposer le port HTTP que Render détectera
+# Exposer le port HTTP pour Render
 EXPOSE 80
 
-# Lancer Apache en avant-plan
+# Lancer Apache
 CMD ["apache2-foreground"]
