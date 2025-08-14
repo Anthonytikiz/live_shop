@@ -2,5 +2,9 @@ vendor/
 var/
 .env
 docker-compose*
-.git/
 .gitignore
+.git
+node_modules
+vendor
+var/cache
+var/log

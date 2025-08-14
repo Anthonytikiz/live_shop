@@ -1,18 +1,32 @@
-# ... [keep previous setup]
+# 1️⃣ Image PHP avec Apache
+FROM php:8.2-apache
 
-# Copy dependency files
-COPY composer.json composer.lock symfony.lock ./
+# 2️⃣ Installer les extensions PHP nécessaires à Symfony
+RUN apt-get update && apt-get install -y \
+    git unzip libicu-dev libzip-dev zip \
+    && docker-php-ext-install intl pdo pdo_mysql zip opcache \
+    && a2enmod rewrite
 
-# Install dependencies with scripts
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+# 3️⃣ Installer Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Manually generate runtime file
-RUN php vendor/bin/runtime get --current --output=/var/www/vendor/autoload_runtime.php
+# 4️⃣ Config Apache pour Symfony
+COPY ./docker/apache/vhost.conf /etc/apache2/sites-available/000-default.conf
 
-# Verify file exists
-RUN if [ ! -f /var/www/vendor/autoload_runtime.php ]; then echo "ERROR: autoload_runtime.php not generated!"; exit 1; fi
-
-# Copy application code
+# 5️⃣ Copier le code Symfony
+WORKDIR /var/www/html
 COPY . .
 
-# ... [keep rest of Dockerfile]
+# 6️⃣ Installer les dépendances PHP
+RUN composer install --no-dev --optimize-autoloader
+
+# 7️⃣ Optimiser Symfony pour la prod
+RUN php bin/console cache:clear --env=prod
+
+# 8️⃣ Droits
+RUN chown -R www-data:www-data /var/www/html/var
+
+# 9️⃣ Port Apache
+EXPOSE 80
+
+CMD ["apache2-foreground"]
