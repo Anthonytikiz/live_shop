@@ -1,32 +1,38 @@
-FROM php:8.2-cli
+# 1️⃣ Image PHP + extensions
+FROM php:8.2-apache
 
-# Install extensions PHP
+# Installer dépendances système et PHP
 RUN apt-get update && apt-get install -y \
     git unzip libicu-dev libzip-dev zip \
-    && docker-php-ext-install intl zip pdo pdo_mysql
+    && docker-php-ext-install intl pdo pdo_mysql zip opcache \
+    && a2enmod rewrite
 
-WORKDIR /app
+# Installer Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Autoriser composer en root
+WORKDIR /var/www/html
+
+# Autoriser Composer en root
 ENV COMPOSER_ALLOW_SUPERUSER=1
 
 # Copier seulement les fichiers de dépendances pour profiter du cache Docker
 COPY composer.json composer.lock ./
 
-# Installer Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
-
 # Installer les dépendances SANS scripts
-RUN composer install --no-scripts --no-dev --optimize-autoloader --no-interaction
+RUN composer install --no-dev --no-scripts --optimize-autoloader --no-interaction
 
 # Copier tout le code du projet
 COPY . .
 
-# Maintenant exécuter les scripts une fois que bin/console existe
-RUN composer run-script post-install-cmd
+# Exécuter manuellement les commandes Symfony nécessaires
+RUN php bin/console cache:clear --env=prod || true
+RUN php bin/console assets:install public || true
 
-# Exposer le port que Render détectera
+# Droits pour Apache
+RUN chown -R www-data:www-data var/
+
+# Exposer le port HTTP que Render détectera
 EXPOSE 80
 
-# Commande de démarrage
-CMD ["php", "-S", "0.0.0.0:80", "-t", "public"]
+# Lancer Apache en avant-plan
+CMD ["apache2-foreground"]
