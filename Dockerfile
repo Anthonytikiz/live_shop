@@ -1,39 +1,32 @@
-FROM php:8.3-fpm
+FROM php:8.2-cli
 
-# Install system dependencies & PHP extensions
+# Install extensions PHP
 RUN apt-get update && apt-get install -y \
-    nginx supervisor git unzip libzip-dev libicu-dev libxml2-dev curl \
-    && docker-php-ext-install intl pdo_mysql zip opcache \
-    && rm -rf /var/lib/apt/lists/*
+    git unzip libicu-dev libzip-dev zip \
+    && docker-php-ext-install intl zip pdo pdo_mysql
 
-# Install Composer
-RUN curl -sS https://getcomposer.org/installer | php -- \
-    --install-dir=/usr/local/bin --filename=composer
+WORKDIR /app
 
-# Set working directory
-WORKDIR /var/www
+# Autoriser composer en root
+ENV COMPOSER_ALLOW_SUPERUSER=1
 
-# Copy dependency files first
+# Copier seulement les fichiers de dépendances pour profiter du cache Docker
 COPY composer.json composer.lock ./
 
-# Install dependencies with scripts enabled
-RUN composer install --no-dev --optimize-autoloader --no-interaction
+# Installer Composer
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
-# Generate autoload files explicitly
-RUN composer dump-autoload --optimize
+# Installer les dépendances SANS scripts
+RUN composer install --no-scripts --no-dev --optimize-autoloader --no-interaction
 
-# Copy application code
+# Copier tout le code du projet
 COPY . .
 
-# Fix permissions
-RUN chown -R www-data:www-data /var/www \
-    && mkdir -p var/cache var/log \
-    && chmod -R 775 var
+# Maintenant exécuter les scripts une fois que bin/console existe
+RUN composer run-script post-install-cmd
 
-# Copy config files
-COPY docker/nginx.conf /etc/nginx/nginx.conf
-COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
+# Exposer le port que Render détectera
 EXPOSE 80
 
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
+# Commande de démarrage
+CMD ["php", "-S", "0.0.0.0:80", "-t", "public"]
