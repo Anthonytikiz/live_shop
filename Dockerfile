@@ -1,32 +1,39 @@
-# 1️⃣ Image PHP avec Apache
-FROM php:8.2-apache
+FROM php:8.3-fpm
 
-# 2️⃣ Installer les extensions PHP nécessaires à Symfony
+# Install system dependencies & PHP extensions
 RUN apt-get update && apt-get install -y \
-    git unzip libicu-dev libzip-dev zip \
-    && docker-php-ext-install intl pdo pdo_mysql zip opcache \
-    && a2enmod rewrite
+    nginx supervisor git unzip libzip-dev libicu-dev libxml2-dev curl \
+    && docker-php-ext-install intl pdo_mysql zip opcache \
+    && rm -rf /var/lib/apt/lists/*
 
-# 3️⃣ Installer Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+# Install Composer
+RUN curl -sS https://getcomposer.org/installer | php -- \
+    --install-dir=/usr/local/bin --filename=composer
 
-# 4️⃣ Config Apache pour Symfony
-COPY ./docker/apache/vhost.conf /etc/apache2/sites-available/000-default.conf
+# Set working directory
+WORKDIR /var/www
 
-# 5️⃣ Copier le code Symfony
-WORKDIR /var/www/html
+# Copy dependency files first
+COPY composer.json composer.lock ./
+
+# Install dependencies with scripts enabled
+RUN composer install --no-dev --optimize-autoloader --no-interaction
+
+# Generate autoload files explicitly
+RUN composer dump-autoload --optimize
+
+# Copy application code
 COPY . .
 
-# 6️⃣ Installer les dépendances PHP
-RUN composer install --no-dev --optimize-autoloader
+# Fix permissions
+RUN chown -R www-data:www-data /var/www \
+    && mkdir -p var/cache var/log \
+    && chmod -R 775 var
 
-# 7️⃣ Optimiser Symfony pour la prod
-RUN php bin/console cache:clear --env=prod
+# Copy config files
+COPY docker/nginx.conf /etc/nginx/nginx.conf
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
 
-# 8️⃣ Droits
-RUN chown -R www-data:www-data /var/www/html/var
-
-# 9️⃣ Port Apache
 EXPOSE 80
 
-CMD ["apache2-foreground"]
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
