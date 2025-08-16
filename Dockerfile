@@ -40,6 +40,10 @@ RUN mkdir -p var/cache var/log var/sessions \
 RUN php bin/console cache:clear --env=prod || true
 RUN php bin/console assets:install public || true
 
+# Environnement de prod
+ENV APP_ENV=prod
+ENV APP_DEBUG=0
+
 # Exposer le port HTTP pour Render
 EXPOSE 80
 
