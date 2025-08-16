@@ -15,12 +15,26 @@ ENV COMPOSER_ALLOW_SUPERUSER=1
 # Copier tout le projet (y compris .env)
 COPY . .
 
+# Config Apache -> DocumentRoot public + accès autorisé
+RUN echo '<VirtualHost *:80>\n\
+    ServerName localhost\n\
+    DocumentRoot /var/www/html/public\n\
+    <Directory /var/www/html/public>\n\
+        Options Indexes FollowSymLinks\n\
+        AllowOverride All\n\
+        Require all granted\n\
+    </Directory>\n\
+    ErrorLog /var/log/apache2/error.log\n\
+    CustomLog /var/log/apache2/access.log combined\n\
+</VirtualHost>' > /etc/apache2/sites-available/000-default.conf
+
 # Installer les dépendances sans scripts pour éviter symfony-cmd
 RUN composer install --no-dev --no-scripts --optimize-autoloader --no-interaction
 
 # Créer var/ si manquant et donner les droits
 RUN mkdir -p var/cache var/log var/sessions \
-    && chown -R www-data:www-data var/
+    && chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html
 
 # Exécuter manuellement les scripts Symfony
 RUN php bin/console cache:clear --env=prod || true
