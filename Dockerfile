@@ -7,14 +7,13 @@ RUN apt-get update && apt-get install -y \
     && a2enmod rewrite \
     && echo "ServerName localhost" >> /etc/apache2/apache2.conf
 
-
 # Installer Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www/html
 ENV COMPOSER_ALLOW_SUPERUSER=1
 
-# Copier tout le projet (y compris .env)
+# Copier tout le projet
 COPY . .
 
 # Config Apache -> DocumentRoot public + accès autorisé
@@ -30,7 +29,7 @@ RUN echo '<VirtualHost *:80>\n\
     CustomLog /var/log/apache2/access.log combined\n\
 </VirtualHost>' > /etc/apache2/sites-available/000-default.conf
 
-# Installer les dépendances sans scripts pour éviter symfony-cmd
+# Installer les dépendances Symfony
 RUN composer install --no-dev --no-scripts --optimize-autoloader --no-interaction
 
 # Créer var/ si manquant et donner les droits
