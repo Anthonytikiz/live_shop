@@ -4,7 +4,9 @@ FROM php:8.2-apache
 RUN apt-get update && apt-get install -y \
     git unzip libicu-dev libzip-dev zip \
     && docker-php-ext-install intl pdo pdo_mysql zip opcache \
-    && a2enmod rewrite
+    && a2enmod rewrite \
+    && echo "ServerName localhost" >> /etc/apache2/apache2.conf
+
 
 # Installer Composer
 COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
