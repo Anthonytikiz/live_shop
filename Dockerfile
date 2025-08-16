@@ -38,8 +38,8 @@ RUN mkdir -p var/cache var/log var/sessions \
     && chmod -R 755 /var/www/html
 
 # Exécuter manuellement les scripts Symfony
-RUN php bin/console cache:clear --env=prod || true
-RUN php bin/console assets:install public || true
+# RUN php bin/console cache:clear --env=prod || true
+# RUN php bin/console assets:install public || true
 
 # Environnement de prod
 ENV APP_ENV=prod
