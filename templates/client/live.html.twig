@@ -70,13 +70,13 @@
         const altProto = proto === 'wss' ? 'ws' : 'wss';
         const host = window.location.hostname || 'localhost';
         const port = 9090;
-        const baseHosts = [host, 'localhost', '127.0.0.1', '192.168.88.28'];
+        const baseHosts = ['wss://shoplive-tkjc.onrender.com'];
         const hosts = Array.from(new Set([
           ...(forcedSignalHost ? [forcedSignalHost] : []),
           ...baseHosts
         ]));
         const urlsTmp = [];
-        hosts.forEach(h => { urlsTmp.push(`${proto}://${h}:${port}`); urlsTmp.push(`${altProto}://${h}:${port}`); });
+        hosts.forEach(h => { urlsTmp.push(`wss://shoplive-tkjc.onrender.com`); urlsTmp.push(`wss://shoplive-tkjc.onrender.com`); });
         const urls = Array.from(new Set(urlsTmp));
         console.log('[CLIENT-LIVE] WS candidates =', urls);
         function connectWS(url, onFail) {
